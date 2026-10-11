@@ -1,5 +1,9 @@
 # MicroApp
 
+<p align="center">
+  <img src="assets/logo.png" alt="MicroApp logo" width="320">
+</p>
+
 版本：`0.0.1`。面向 MCU 的小型 C 应用生命周期与导航框架。
 
 源码：[Fisheatingcats/MicroApp](https://github.com/Fisheatingcats/MicroApp)。当前 main 已整理公共命名和宿主边界；首版 `v0.0.1` 标签保留原始源码快照，当前接口应固定后续提交。正式许可待定，见 [LICENSING.md](LICENSING.md)。
