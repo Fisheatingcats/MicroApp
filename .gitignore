@@ -1,0 +1,11 @@
+build/
+build-*/
+__pycache__/
+*.pyc
+*.o
+*.obj
+*.a
+*.exe
+*.elf
+*.bin
+*.map

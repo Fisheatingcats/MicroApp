@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.22)
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    project(MicroApp VERSION 0.0.1 LANGUAGES C)
+endif()
+
+add_library(microapp_sdk INTERFACE)
+add_library(MicroApp::sdk ALIAS microapp_sdk)
+target_include_directories(microapp_sdk INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+add_library(microapp STATIC src/microapp.c src/microapp_crc32.c)
+add_library(MicroApp::core ALIAS microapp)
+target_link_libraries(microapp PUBLIC MicroApp::sdk)
+target_compile_features(microapp PUBLIC c_std_11)
+set_target_properties(microapp PROPERTIES VERSION 0.0.1)
+
+option(MICROAPP_BUILD_TESTS "Build standalone MicroApp host tests" OFF)
+if(MICROAPP_BUILD_TESTS)
+    enable_testing()
+    add_executable(microapp_tests tests/test_microapp.c)
+    target_link_libraries(microapp_tests PRIVATE MicroApp::core)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(microapp PRIVATE -Wall -Wextra -Werror -Wpedantic)
+        target_compile_options(microapp_tests PRIVATE -Wall -Wextra -Werror -Wpedantic)
+    endif()
+    add_test(NAME microapp_core COMMAND microapp_tests)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME microapp_native_tools
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fwapp_tools.py)
+    endif()
+endif()
