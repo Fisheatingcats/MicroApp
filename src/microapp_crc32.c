@@ -1,4 +1,4 @@
-/** @file microapp_crc32.c @brief Allocation-free CRC32, extracted from FreeWatch. */
+/** @file microapp_crc32.c @brief Allocation-free IEEE CRC32. */
 #include "microapp/microapp_crc32.h"
 
 uint32_t microapp_crc32_update(uint32_t crc, const uint8_t *data, size_t len)

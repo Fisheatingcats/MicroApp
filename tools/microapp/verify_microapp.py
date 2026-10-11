@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse and validate a native .fwapp package against a board profile."""
+"""Parse and validate a native MicroApp package against a board profile."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import argparse
 import binascii
 import struct
 from pathlib import Path
-from profile import load_profile
+from microapp_profile import load_profile
 
 
 PACKAGE_MAGIC = 0x504B5746
@@ -138,10 +138,17 @@ def main() -> int:
         raise SystemExit("bad image crc")
     if zstr(strings[0]) != profile["board_id"]:
         raise SystemExit("bad board id")
-    if abi_major != 1:
+    if abi_major != profile["abi_major"]:
         raise SystemExit("bad abi major")
-    if min_host_version > 1:
+    if abi_minor > profile["abi_minor"]:
+        raise SystemExit("bad abi minor")
+    if min_host_version > profile["host_version"]:
         raise SystemExit("host version too old")
+    allowed_permissions = 0
+    for bit in profile["permissions"].values():
+        allowed_permissions |= bit
+    if permission_mask & ~allowed_permissions:
+        raise SystemExit("bad permission mask")
     if slot_base != profile["slot_base"] or slot_size != profile["slot_size"]:
         raise SystemExit("bad slot geometry")
     if manifest_image_offset != profile["image_offset"]:

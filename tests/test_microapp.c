@@ -1,7 +1,8 @@
 /** @file test_microapp.c @brief Host tests for lifecycle ownership and navigation. */
 #include "microapp/microapp.h"
 #include "microapp/microapp_crc32.h"
-#include "microapp/fwapp_format.h"
+#include "microapp/microapp_format.h"
+#include "microapp/microapp_abi_port.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -218,6 +219,9 @@ static void test_registry_and_crc(void)
 
 int main(void)
 {
+    CHECK(sizeof(microapp_abi_header_t) == 12);
+    CHECK(MICROAPP_ABI_REASON_DESTROY == 5);
+    CHECK(MICROAPP_ABI_ERR_NOT_FOUND == -5);
     test_navigation();
     test_failed_launch();
     test_deferred_and_unregister();

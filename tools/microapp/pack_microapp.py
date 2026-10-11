@@ -9,26 +9,17 @@ import re
 import struct
 import subprocess
 from pathlib import Path
-from profile import load_profile
+from microapp_profile import load_profile
 from typing import NamedTuple
 
 
 PACKAGE_MAGIC = 0x504B5746
 FORMAT_MAJOR = 1
 FORMAT_MINOR = 0
-ABI_MAJOR = 1
-ABI_MINOR = 2
 PACKAGE_HEADER_SIZE = 56
 MANIFEST_SIZE = 280
 RESOURCE_TABLE_MAGIC = 0x54525746
 RESOURCE_TABLE_VERSION = 1
-
-PERMISSIONS = {
-    "GUI": 1 << 0,
-    "LOG": 1 << 1,
-    "RESOURCE_RO": 1 << 2,
-    "MOTOR": 1 << 3,
-}
 
 PACKAGE_HEADER_STRUCT = struct.Struct("<IHHIIIIIIIIIIII")
 MANIFEST_STRUCT = struct.Struct("<32s32s32s16s32s64s18I")
@@ -127,7 +118,7 @@ def main() -> int:
     parser.add_argument("--name", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--author", default="MicroApp")
-    parser.add_argument("--description", default="Native .fwapp")
+    parser.add_argument("--description", default="Native MicroApp")
     parser.add_argument("--permission", action="append", default=[])
     parser.add_argument("--resource", action="append", default=[],
                         type=parse_resource,
@@ -143,17 +134,17 @@ def main() -> int:
         raise SystemExit("image exceeds app slot")
 
     symbols = nm_symbols(args.elf)
-    entry_addr = required_symbol(symbols, "fwapp_main")
-    text_start = required_symbol(symbols, "__fwapp_text_start")
-    text_size = required_symbol(symbols, "__fwapp_text_size")
-    data_load = required_symbol(symbols, "__fwapp_data_load")
-    data_size = required_symbol(symbols, "__fwapp_data_size")
-    data_start = required_symbol(symbols, "__fwapp_data_start")
-    bss_size = required_symbol(symbols, "__fwapp_bss_size")
+    entry_addr = required_symbol(symbols, profile["symbols"]["entry"])
+    text_start = required_symbol(symbols, profile["symbols"]["text_start"])
+    text_size = required_symbol(symbols, profile["symbols"]["text_size"])
+    data_load = required_symbol(symbols, profile["symbols"]["data_load"])
+    data_size = required_symbol(symbols, profile["symbols"]["data_size"])
+    data_start = required_symbol(symbols, profile["symbols"]["data_start"])
+    bss_size = required_symbol(symbols, profile["symbols"]["bss_size"])
     entry_addr &= ~1
     slot_image_addr = profile["slot_base"] + profile["image_offset"]
     if not (slot_image_addr <= entry_addr < slot_image_addr + len(image)):
-        raise SystemExit("fwapp_main is outside app image")
+        raise SystemExit("native entry is outside app image")
     if text_start != slot_image_addr:
         raise SystemExit("text section must start at app image base")
     if data_size > profile["ram_size"] or bss_size > profile["ram_size"] - data_size:
@@ -165,9 +156,9 @@ def main() -> int:
 
     permission_mask = 0
     for permission in args.permission:
-        if permission not in PERMISSIONS:
+        if permission not in profile["permissions"]:
             raise SystemExit(f"unknown permission {permission}")
-        permission_mask |= PERMISSIONS[permission]
+        permission_mask |= profile["permissions"][permission]
 
     image_crc = binascii.crc32(image) & 0xFFFFFFFF
     entry_offset = entry_addr - profile["slot_base"]
@@ -186,9 +177,9 @@ def main() -> int:
         cstr(args.version, 16),
         cstr(args.author, 32),
         cstr(args.description, 64),
-        ABI_MAJOR,
-        ABI_MINOR,
-        1,
+        profile["abi_major"],
+        profile["abi_minor"],
+        profile["host_version"],
         permission_mask,
         profile["slot_base"],
         profile["slot_size"],

@@ -27,6 +27,6 @@ if(MICROAPP_BUILD_TESTS)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
         add_test(NAME microapp_native_tools
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fwapp_tools.py)
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_microapp_tools.py)
     endif()
 endif()
