@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="675" viewBox="0 0 1120 675" role="img" aria-label="唯一实例切换：先销毁旧实例，再准备并创建新实例">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
+<style>text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#172554} .title{font-size:26px;font-weight:700} .head{font-size:19px;font-weight:700} .body{font-size:16px} .note{font-size:14px;fill:#475569}</style>
+<rect width="1120" height="675" rx="14" fill="#f8fafc"/>
+<text x="40" y="45" class="title" text-anchor="start">单实例切换的资源时序</text>
+<text x="40" y="78" class="note" text-anchor="start">时间向下。只有空 view 分配失败可以保留旧实例；新 CREATE 失败则尝试重建 Home。</text>
+<rect x="35" y="105" width="270" height="60" rx="12" fill="#e0f2fe" stroke="#94a3b8"/>
+<text x="170.0" y="135" class="head" text-anchor="middle">管理器 / 宿主</text>
+<path d="M170 165 V590" stroke="#94a3b8" stroke-dasharray="5 5"/>
+<rect x="425" y="105" width="270" height="60" rx="12" fill="#e0f2fe" stroke="#94a3b8"/>
+<text x="560.0" y="135" class="head" text-anchor="middle">旧 App 实例</text>
+<path d="M560 165 V590" stroke="#94a3b8" stroke-dasharray="5 5"/>
+<rect x="815" y="105" width="270" height="60" rx="12" fill="#e0f2fe" stroke="#94a3b8"/>
+<text x="950.0" y="135" class="head" text-anchor="middle">新 App 实例</text>
+<path d="M950 165 V590" stroke="#94a3b8" stroke-dasharray="5 5"/>
+<text x="170" y="205" class="body" text-anchor="middle">先分配空 view</text>
+<path d="M170 245 L560 245" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="365.0" y="235.0" class="note" text-anchor="middle">PAUSE → DESTROY</text>
+<rect x="552" y="170" width="16" height="113" fill="#38bdf8"/>
+<text x="560" y="312" class="note" text-anchor="middle">旧实例已释放 / 旧回调失效</text>
+<path d="M170 360 L950 360" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="560.0" y="350.0" class="note" text-anchor="middle">准备共享 RAM：清零、初始化、GOT 修正</text>
+<path d="M170 408 L950 408" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="560.0" y="398.0" class="note" text-anchor="middle">CREATE</text>
+<rect x="942" y="360" width="16" height="225" fill="#818cf8"/>
+<text x="170" y="461" class="body" text-anchor="middle">成功：显示新 view</text>
+<text x="170" y="500" class="body" text-anchor="middle">删除旧 view</text>
+<path d="M170 550 L950 550" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="560.0" y="540.0" class="note" text-anchor="middle">RESUME</text>
+<text x="560" y="625" class="head" text-anchor="middle">两个根 view 可暂时共存；两个 App 实例不能重叠。</text>
+<text x="560" y="651" class="note" text-anchor="middle">GUI 堆、宿主栈和 App RAM 分别预算。失败 CREATE 的局部资源由 App / 原生适配器清理。</text>
+</svg>

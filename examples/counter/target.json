@@ -1,0 +1,5 @@
+{
+  "board_id": "counter_host", "architecture": "armv7e-m", "float_abi": "hard",
+  "abi_major": 1, "abi_minor": 0, "host_version": 1,
+  "max_body_size": 130560, "max_ram_size": 8192, "permissions": {"LOG": 1}
+}

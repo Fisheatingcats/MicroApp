@@ -29,6 +29,7 @@ typedef struct {
     unsigned deleted;
     void *visible;
     microapp_status_t nested_result;
+    app_state_t *resident;
     microapp_info_t info[3];
     microapp_app_t app[3];
     app_state_t state[3];
@@ -73,8 +74,10 @@ static microapp_status_t create(void *host, void *user, void *view, void *param)
     app_state_t *state = (app_state_t *)user;
     (void)param;
     CHECK(view != NULL);
+    CHECK(f->resident == NULL); /* Old App must release shared RAM before CREATE. */
     ++state->creates;
     f->nested_result = microapp_launch(&f->core, "home", NULL);
+    if (!state->fail) f->resident = state;
     return state->fail ? MICROAPP_ERR_CREATE : MICROAPP_OK;
 }
 
@@ -92,7 +95,9 @@ static void pause(void *host, void *user)
 
 static void destroy(void *host, void *user)
 {
-    (void)host;
+    fixture_t *f = host;
+    CHECK(f->resident == user);
+    f->resident = NULL;
     ++((app_state_t *)user)->destroys;
 }
 
@@ -157,8 +162,9 @@ static void test_failed_launch(void)
     void *view = f.core.active_view;
     f.state[1].fail = true;
     CHECK(microapp_launch(&f.core, "a", NULL) == MICROAPP_ERR_CREATE);
-    CHECK(f.core.active == &f.app[0] && f.core.active_view == view);
-    CHECK(f.core.history_count == 0 && f.state[0].destroys == 0 && f.deleted == 1);
+    CHECK(f.core.active == &f.app[0] && f.core.active_view != view);
+    CHECK(f.core.history_count == 0 && f.state[0].destroys == 1 && f.deleted == 2);
+    CHECK(f.state[0].creates == 2); /* Failed launch reconstructs Home. */
     f.no_memory = true;
     CHECK(microapp_launch(&f.core, "b", NULL) == MICROAPP_ERR_NOMEM);
     CHECK(f.core.history_count == 0 && f.state[2].creates == 0);
@@ -217,6 +223,33 @@ static void test_registry_and_crc(void)
     CHECK(microapp_crc32(NULL, 0) == 0);
 }
 
+static void test_dynamic_registry(void)
+{
+    fixture_t f;
+    init(&f);
+    microapp_info_t info[32] = {0};
+    microapp_app_t apps[32] = {0};
+    microapp_registration_t nodes[32] = {0};
+    char ids[32][16];
+    for (unsigned i = 0; i < 32; ++i) {
+        snprintf(ids[i], sizeof(ids[i]), "dynamic%u", i);
+        info[i].id = ids[i];
+        apps[i] = (microapp_app_t){&info[i], &lifecycle, &f.state[1]};
+        CHECK(microapp_register_dynamic(&f.core, &nodes[i], &apps[i]) == MICROAPP_OK);
+        CHECK(microapp_at(&f.core, i + 3u) == &apps[i]);
+    }
+    CHECK(microapp_count(&f.core) == 35);
+    CHECK(microapp_register_dynamic(&f.core, &nodes[0], &apps[0]) == MICROAPP_ERR_BUSY);
+    CHECK(microapp_launch(&f.core, ids[0], NULL) == MICROAPP_OK);
+    CHECK(microapp_launch(&f.core, ids[31], NULL) == MICROAPP_OK);
+    CHECK(microapp_unregister(&f.core, ids[31]) == MICROAPP_ERR_BUSY);
+    CHECK(microapp_unregister(&f.core, ids[0]) == MICROAPP_OK);
+    CHECK(microapp_unregister(&f.core, ids[16]) == MICROAPP_OK);
+    CHECK(nodes[0].app == NULL && nodes[16].next == NULL);
+    CHECK(microapp_deinit(&f.core) == MICROAPP_OK);
+    for (unsigned i = 0; i < 32; ++i) CHECK(nodes[i].app == NULL && nodes[i].next == NULL);
+}
+
 int main(void)
 {
     CHECK(sizeof(microapp_abi_header_t) == 12);
@@ -226,6 +259,7 @@ int main(void)
     test_failed_launch();
     test_deferred_and_unregister();
     test_registry_and_crc();
+    test_dynamic_registry();
     puts("PASS: navigation, failed launch, deferred callbacks, registry and CRC32");
     return 0;
 }

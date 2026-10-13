@@ -1,260 +1,56 @@
 #!/usr/bin/env python3
-"""Pack a fixed-address native app image using an explicit board profile."""
-
-from __future__ import annotations
-
+"""Audit ET_DYN and package immutable code + instance RAM initialization."""
 import argparse
-import binascii
-import re
-import struct
-import subprocess
+import json
 from pathlib import Path
 from microapp_profile import load_profile
-from typing import NamedTuple
+from microapp_elf import extract_elf
+from microapp_wire import HEADER, MANIFEST, FIXUP, MAGIC, encode_manifest, resource_blob, align, crc, validate
 
+def pack(elf,profile,metadata,resources=()):
+    x=extract_elf(elf,profile['float_abi'])
+    permissions=metadata.get('permissions',[])
+    if any(p not in profile.get('permissions',{}) for p in permissions):
+        raise ValueError('unknown permission')
+    m={k:metadata.get(k,'') for k in ('app_id','name','version','author','description')}
+    if any(not m[k] for k in ('app_id','name','version')): raise ValueError('manifest requires app_id/name/version')
+    m.update(board_id=profile['board_id'], abi_major=profile['abi_major'],abi_minor=profile['abi_minor'],
+             min_host_version=profile['host_version'],permission_mask=sum(profile['permissions'][p] for p in set(permissions)),
+             architecture=1,float_abi=('soft','softfp','hard').index(profile['float_abi']))
+    body=bytearray(align(x['image'])); m.update(image_size=len(x['image']),image_crc32=crc(x['image']))
+    m.update({k:x[k] for k in ('entry_offset','image_alignment','ram_size','ram_alignment','got_offset','got_size','bss_offset','bss_size','data_size')})
+    m.update(init_offset=len(body),init_size=len(x['initial'])); body.extend(align(x['initial']))
+    m.update(fixup_offset=len(body),fixup_count=len(x['fixups']))
+    for f in x['fixups']: body.extend(FIXUP.pack(*f))
+    res=resource_blob(resources); m.update(resource_offset=len(body),resource_size=len(res),resource_crc32=crc(res)); body.extend(res)
+    m.update(body_size=len(body),body_crc32=crc(body))
+    off=HEADER.size+MANIFEST.size; total=off+len(body)
+    fields=[MAGIC,2,0,56,total,56,MANIFEST.size,off,len(body),off+m['resource_offset'],len(res),total,0,total,0]
+    data=HEADER.pack(*fields)+encode_manifest(m)+body
+    fields[-1]=crc(data); data=HEADER.pack(*fields)+data[56:]
+    validate(data,profile)
+    report={**m,'sdk_version':'0.0.2','package_size':len(data),'flash_body':len(body),
+            'got':x['got_size'],'data':x['data_size'],'bss':x['bss_size'],'total_ram':x['ram_size'],
+            'audited_relocations':x['audited_relocations'],'external_dependencies':[]}
+    return data,report
 
-PACKAGE_MAGIC = 0x504B5746
-FORMAT_MAJOR = 1
-FORMAT_MINOR = 0
-PACKAGE_HEADER_SIZE = 56
-MANIFEST_SIZE = 280
-RESOURCE_TABLE_MAGIC = 0x54525746
-RESOURCE_TABLE_VERSION = 1
-
-PACKAGE_HEADER_STRUCT = struct.Struct("<IHHIIIIIIIIIIII")
-MANIFEST_STRUCT = struct.Struct("<32s32s32s16s32s64s18I")
-RESOURCE_TABLE_HEADER_STRUCT = struct.Struct("<IHHI")
-RESOURCE_ENTRY_STRUCT = struct.Struct("<32sIII")
-
-
-class ResourceInput(NamedTuple):
-    name: str
-    path: Path
-
-
-def cstr(value: str, size: int) -> bytes:
-    raw = value.encode("ascii")
-    if len(raw) >= size:
-        raise ValueError(f"{value!r} is too long for {size} bytes")
-    return raw + b"\0" * (size - len(raw))
-
-
-def nm_symbols(elf: Path) -> dict[str, int]:
-    output = subprocess.check_output(
-        ["arm-none-eabi-nm", "-n", str(elf)],
-        text=True,
-        stderr=subprocess.STDOUT,
-    )
-    symbols: dict[str, int] = {}
-    for line in output.splitlines():
-        match = re.match(r"^([0-9a-fA-F]+)\s+\w\s+(\S+)$", line)
-        if match:
-            symbols[match.group(2)] = int(match.group(1), 16)
-    return symbols
-
-
-def parse_resource(value: str) -> ResourceInput:
-    if "=" in value:
-        name, path = value.split("=", 1)
-    else:
-        path = value
-        name = Path(value).name
-    if not name or len(name.encode("ascii")) >= 32:
-        raise argparse.ArgumentTypeError("resource name must be 1..31 ASCII bytes")
-    return ResourceInput(name=name, path=Path(path))
-
-
-def align4(data: bytes) -> bytes:
-    return data + (b"\0" * ((4 - (len(data) % 4)) % 4))
-
-
-def build_resource_blob(resources: list[ResourceInput]) -> bytes:
-    if not resources:
-        return b""
-    if len(resources) > 0xFFFF:
-        raise ValueError("too many resources")
-    entry_count = len(resources)
-    table_size = RESOURCE_TABLE_HEADER_STRUCT.size + entry_count * RESOURCE_ENTRY_STRUCT.size
-    payload = bytearray()
-    entries = bytearray()
-
-    for resource in resources:
-        raw = resource.path.read_bytes()
-        offset = table_size + len(payload)
-        entries.extend(
-            RESOURCE_ENTRY_STRUCT.pack(
-                cstr(resource.name, 32),
-                offset,
-                len(raw),
-                binascii.crc32(raw) & 0xFFFFFFFF,
-            )
-        )
-        payload.extend(align4(raw))
-
-    return (
-        RESOURCE_TABLE_HEADER_STRUCT.pack(
-            RESOURCE_TABLE_MAGIC,
-            RESOURCE_TABLE_VERSION,
-            entry_count,
-            table_size,
-        )
-        + bytes(entries)
-        + bytes(payload)
-    )
-
-
-def required_symbol(symbols: dict[str, int], name: str) -> int:
-    if name not in symbols:
-        raise SystemExit(f"{name} symbol not found")
-    return symbols[name]
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--image", required=True, type=Path)
-    parser.add_argument("--elf", required=True, type=Path)
-    parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--app-id", required=True)
-    parser.add_argument("--name", required=True)
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--author", default="MicroApp")
-    parser.add_argument("--description", default="Native MicroApp")
-    parser.add_argument("--permission", action="append", default=[])
-    parser.add_argument("--resource", action="append", default=[],
-                        type=parse_resource,
-                        help="Add read-only resource as NAME=PATH")
-    parser.add_argument("--profile", required=True, type=Path, help="Board geometry JSON")
-    args = parser.parse_args()
-    profile = load_profile(args.profile)
-
-    image = args.image.read_bytes()
-    if not image:
-        raise SystemExit("image is empty")
-    if len(image) > profile["slot_size"] - profile["image_offset"]:
-        raise SystemExit("image exceeds app slot")
-
-    symbols = nm_symbols(args.elf)
-    entry_addr = required_symbol(symbols, profile["symbols"]["entry"])
-    text_start = required_symbol(symbols, profile["symbols"]["text_start"])
-    text_size = required_symbol(symbols, profile["symbols"]["text_size"])
-    data_load = required_symbol(symbols, profile["symbols"]["data_load"])
-    data_size = required_symbol(symbols, profile["symbols"]["data_size"])
-    data_start = required_symbol(symbols, profile["symbols"]["data_start"])
-    bss_size = required_symbol(symbols, profile["symbols"]["bss_size"])
-    entry_addr &= ~1
-    slot_image_addr = profile["slot_base"] + profile["image_offset"]
-    if not (slot_image_addr <= entry_addr < slot_image_addr + len(image)):
-        raise SystemExit("native entry is outside app image")
-    if text_start != slot_image_addr:
-        raise SystemExit("text section must start at app image base")
-    if data_size > profile["ram_size"] or bss_size > profile["ram_size"] - data_size:
-        raise SystemExit("APP_RAM overflow")
-    if data_size and not (slot_image_addr <= data_load < slot_image_addr + len(image)):
-        raise SystemExit("data load address is outside app image")
-    if data_start != profile["ram_base"]:
-        raise SystemExit("data section must start at APP_RAM base")
-
-    permission_mask = 0
-    for permission in args.permission:
-        if permission not in profile["permissions"]:
-            raise SystemExit(f"unknown permission {permission}")
-        permission_mask |= profile["permissions"][permission]
-
-    image_crc = binascii.crc32(image) & 0xFFFFFFFF
-    entry_offset = entry_addr - profile["slot_base"]
-    resource_blob = build_resource_blob(args.resource)
-    installed_resource_offset = profile["image_offset"] + len(image)
-    installed_resource_offset = (installed_resource_offset + 3) & ~3
-    if resource_blob and installed_resource_offset + len(resource_blob) > profile["slot_size"]:
-        raise SystemExit("image plus resources exceed app slot")
-    resource_crc = binascii.crc32(resource_blob) & 0xFFFFFFFF if resource_blob else 0
-
-    data_offset = (data_load - profile["slot_base"]) if data_size else 0
-    manifest = MANIFEST_STRUCT.pack(
-        cstr(profile["board_id"], 32),
-        cstr(args.app_id, 32),
-        cstr(args.name, 32),
-        cstr(args.version, 16),
-        cstr(args.author, 32),
-        cstr(args.description, 64),
-        profile["abi_major"],
-        profile["abi_minor"],
-        profile["host_version"],
-        permission_mask,
-        profile["slot_base"],
-        profile["slot_size"],
-        profile["image_offset"],
-        len(image),
-        image_crc,
-        entry_offset,
-        profile["ram_base"],
-        profile["ram_size"],
-        data_offset,
-        data_size,
-        bss_size,
-        installed_resource_offset if resource_blob else 0,
-        len(resource_blob),
-        resource_crc,
-    )
-
-    header_size = PACKAGE_HEADER_STRUCT.size
-    if header_size != PACKAGE_HEADER_SIZE or len(manifest) != MANIFEST_SIZE:
-        raise SystemExit("tool/package struct size mismatch")
-    manifest_offset = header_size
-    image_offset = manifest_offset + len(manifest)
-    resource_offset = image_offset + len(image)
-    resource_offset = (resource_offset + 3) & ~3
-    signature_offset = resource_offset + len(resource_blob)
-    signature_size = 0
-    signed_size = signature_offset
-    total_size = signature_offset + signature_size
-
-    header_without_crc = PACKAGE_HEADER_STRUCT.pack(
-        PACKAGE_MAGIC,
-        FORMAT_MAJOR,
-        FORMAT_MINOR,
-        header_size,
-        total_size,
-        manifest_offset,
-        len(manifest),
-        image_offset,
-        len(image),
-        resource_offset if resource_blob else 0,
-        len(resource_blob),
-        signature_offset,
-        signature_size,
-        signed_size,
-        0,
-    )
-    package_prefix = header_without_crc + manifest + image
-    package_prefix = package_prefix + (b"\0" * (resource_offset - len(package_prefix)))
-    payload_for_crc = package_prefix + resource_blob
-    crc = binascii.crc32(payload_for_crc[:signed_size]) & 0xFFFFFFFF
-    header = PACKAGE_HEADER_STRUCT.pack(
-        PACKAGE_MAGIC,
-        FORMAT_MAJOR,
-        FORMAT_MINOR,
-        header_size,
-        total_size,
-        manifest_offset,
-        len(manifest),
-        image_offset,
-        len(image),
-        resource_offset if resource_blob else 0,
-        len(resource_blob),
-        signature_offset,
-        signature_size,
-        signed_size,
-        crc,
-    )
-
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    package = header + manifest + image
-    package = package + (b"\0" * (resource_offset - len(package)))
-    args.out.write_bytes(package + resource_blob)
-    print(f"wrote {args.out} ({total_size} bytes)")
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--elf',type=Path,required=True); p.add_argument('--profile',type=Path,required=True)
+    p.add_argument('--manifest',type=Path); p.add_argument('--out',type=Path,required=True)
+    for key in ('app-id','name','version','author','description'): p.add_argument('--'+key,default='')
+    p.add_argument('--permission',action='append',default=[]); p.add_argument('--resource',action='append',default=[])
+    a=p.parse_args(); metadata=json.loads(a.manifest.read_text()) if a.manifest else {
+        'app_id':a.app_id,'name':a.name,'version':a.version,'author':a.author,'description':a.description,'permissions':a.permission}
+    resources=[]
+    for raw in a.resource:
+        name,path=raw.split('=',1) if '=' in raw else (Path(raw).name,raw)
+        resources.append((name,Path(path)))
+    data,report=pack(a.elf,load_profile(a.profile),metadata,resources)
+    a.out.parent.mkdir(parents=True,exist_ok=True); a.out.write_bytes(data)
+    a.out.with_suffix(a.out.suffix+'.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(f"{a.out}: Flash {report['flash_body']} / GOT {report['got']} / data {report['data']} / BSS {report['bss']} / RAM {report['total_ram']}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__=='__main__':
+    try: raise SystemExit(main())
+    except (ValueError,KeyError,OSError) as e: raise SystemExit(str(e))

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="720" viewBox="0 0 1120 720" role="img" aria-label="MicroApp 架构：构建、持久化与宿主接口注入">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
+<style>text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#172554} .title{font-size:26px;font-weight:700} .head{font-size:19px;font-weight:700} .body{font-size:16px} .note{font-size:14px;fill:#475569}</style>
+<rect width="1120" height="720" rx="14" fill="#f8fafc"/>
+<text x="40" y="48" class="title" text-anchor="start">MicroApp：交付与运行分开设计</text>
+<text x="40" y="82" class="note" text-anchor="start">上方是构建产物链路，下方是宿主内的同步调用与存储协议。</text>
+<rect x="40" y="110" width="270" height="128" rx="12" fill="#e0f2fe" stroke="#94a3b8"/>
+<text x="175.0" y="140" class="head" text-anchor="middle">App 源码 + 共享 ABI</text>
+<text x="175.0" y="170" class="body" text-anchor="middle">业务 C / target / manifest</text>
+<text x="175.0" y="194" class="body" text-anchor="middle">不链接宿主实现</text>
+<rect x="430" y="110" width="270" height="128" rx="12" fill="#e0f2fe" stroke="#94a3b8"/>
+<text x="565.0" y="140" class="head" text-anchor="middle">独立 ARM SDK</text>
+<text x="565.0" y="170" class="body" text-anchor="middle">PIC 编译 → ET_DYN</text>
+<text x="565.0" y="194" class="body" text-anchor="middle">真实 ELF 审计 → 打包</text>
+<rect x="820" y="110" width="260" height="128" rx="12" fill="#e0f2fe" stroke="#94a3b8"/>
+<text x="950.0" y="140" class="head" text-anchor="middle">2.0 .mapp</text>
+<text x="950.0" y="170" class="body" text-anchor="middle">清单 + 不可变正文</text>
+<text x="950.0" y="194" class="body" text-anchor="middle">RAM 修正 + 资源</text>
+<path d="M310 172 L430 172" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="370.0" y="162.0" class="note" text-anchor="middle">构建</text>
+<path d="M700 172 L820 172" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="760.0" y="162.0" class="note" text-anchor="middle">交付</text>
+<rect x="24" y="278" width="1072" height="394" rx="14" fill="#fff" stroke="#64748b" stroke-dasharray="7 5"/>
+<text x="44" y="309" class="head" text-anchor="start">产品宿主：驱动、权限、调度、安装入口、实例所有权</text>
+<rect x="50" y="340" width="280" height="128" rx="12" fill="#dcfce7" stroke="#94a3b8"/>
+<text x="190.0" y="370" class="head" text-anchor="middle">持久化协议 / Flash</text>
+<text x="190.0" y="400" class="body" text-anchor="middle">追加、提交、删除、恢复</text>
+<text x="190.0" y="424" class="body" text-anchor="middle">扫描后重建注册节点</text>
+<rect x="420" y="340" width="280" height="128" rx="12" fill="#dcfce7" stroke="#94a3b8"/>
+<text x="560.0" y="370" class="head" text-anchor="middle">生命周期管理器</text>
+<text x="560.0" y="400" class="body" text-anchor="middle">系统槽 + 动态节点</text>
+<text x="560.0" y="424" class="body" text-anchor="middle">唯一活动 App / 延迟导航</text>
+<rect x="810" y="340" width="260" height="128" rx="12" fill="#dcfce7" stroke="#94a3b8"/>
+<text x="940.0" y="370" class="head" text-anchor="middle">原生装载原语</text>
+<text x="940.0" y="400" class="body" text-anchor="middle">包校验 / RAM 准备</text>
+<text x="940.0" y="424" class="body" text-anchor="middle">r9 AAPCS 桥</text>
+<path d="M950 238 L950 270" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M950 270 L190 270" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M190 270 L190 340" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="545" y="259" class="note" text-anchor="middle">宿主验证完整包后安装；记录正文保持不变</text>
+<path d="M330 404 L420 404" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="375.0" y="394.0" class="note" text-anchor="middle">注册</text>
+<path d="M700 404 L810 404" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="755.0" y="394.0" class="note" text-anchor="middle">生命周期</text>
+<rect x="50" y="520" width="280" height="115" rx="12" fill="#fef3c7" stroke="#94a3b8"/>
+<text x="190.0" y="550" class="head" text-anchor="middle">宿主服务表</text>
+<text x="190.0" y="580" class="body" text-anchor="middle">GUI / 设备 / 日志</text>
+<text x="190.0" y="604" class="body" text-anchor="middle">由宿主定义与检查权限</text>
+<rect x="520" y="520" width="550" height="115" rx="12" fill="#e0e7ff" stroke="#94a3b8"/>
+<text x="795.0" y="550" class="head" text-anchor="middle">单个活动 App 实例</text>
+<text x="795.0" y="580" class="body" text-anchor="middle">共享 RAM：GOT + data + BSS</text>
+<text x="795.0" y="604" class="body" text-anchor="middle">App 回调执行业务，服务调用返回宿主</text>
+<path d="M940 468 L940 520" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="940.0" y="484.0" class="note" text-anchor="middle">准备 / 调用</text>
+<path d="M330 577 L520 577" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)" stroke-dasharray="6 5"/>
+<text x="425.0" y="567.0" class="note" text-anchor="middle">函数表注入</text>
+<text x="40" y="700" class="note" text-anchor="start">MicroApp 提供通用机制；产品宿主提供介质与服务策略。未运行 App 无实例 RAM，但有 Flash 和注册元数据。</text>
+</svg>
