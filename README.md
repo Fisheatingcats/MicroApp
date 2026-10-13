@@ -2,35 +2,69 @@
 
 <p align="center"><img src="assets/logo.png" alt="MicroApp logo" width="320"></p>
 
-版本 `V0.0.2`。MicroApp 提供 MCU App 生命周期管理，以及独立的 ARM App 构建、链接、打包、检查和校验 SDK。公共代码、工具和无 GUI 示例不依赖 LVGL、HAL、RTOS 或产品工程。
+MicroApp 是面向 MCU 的 App 管理框架与独立 ARM SDK。业务 App 可单独编译为 `.mapp` 安装包，通过宿主传入的函数表使用日志、GUI 或设备服务；主固件负责平台适配和安装管理。
 
-发布标签、展示字符串与本版示例 App 清单统一使用 `V0.0.2`；CMake 的数字版本和版本宏仍为 `0.0.2`。宿主 ABI 与安装包格式独立管理。
+**当前版本：`V0.0.2`** · 源码：[Fisheatingcats/MicroApp](https://github.com/Fisheatingcats/MicroApp)
 
-源码：[Fisheatingcats/MicroApp](https://github.com/Fisheatingcats/MicroApp)。首版 `v0.0.1` 标签保持不变。正式许可与商业授权条款待定，见 [LICENSING.md](LICENSING.md)。
+支持安装多个 App，由一个生命周期管理器维护一个前台实例。原生宿主可在进入 App 时准备实例 RAM，退出后复用给下一个 App；同一份安装包可以在兼容宿主提供的不同 Flash/RAM 基址运行。
 
-## 教程与 API 文档
+## 提供的能力
 
-- [软件架构完整教程](docs/architecture-tutorial.md)：分层、三种 App 对象、生命周期、接口注入、ELF/PIC、GOT/r9、安装事务、恢复与宿主移植。
-- [Doxygen 文档生成与注释维护](docs/doxygen.md)：从库根目录执行 `doxygen Doxyfile`，生成带模块、类型、参数与源码浏览的 HTML。
+| 模块 | 职责 |
+|---|---|
+| ARM SDK | CMake 构建、PIC 链接、ELF 依赖与重定位审计、打包、校验和占用报告 |
+| 原生装载接口 | 流式包校验、GOT/data/BSS 准备、保存和恢复 r9 的 ARM 调用桥 |
+| 生命周期管理器 | 静态/动态注册、单前台生命周期、view 回调、延迟导航与历史管理 |
+| 多 App 存储协议 | 追加提交、按 ID 更新/删除、枚举、空间整理与已提交备份恢复 |
 
-公共头文件记录接口契约，核心实现与 counter 示例使用 Doxygen 风格注释。注释与教程以当前 V0.0.2 实现为准。
+核心、工具和无 GUI 示例不依赖 LVGL、HAL、RTOS 或产品工程。宿主提供 Flash 驱动、GUI/设备服务、调用上下文、权限和签名策略；App 只依赖双方约定的接口头文件。
 
-## 独立构建 ARM App
+当前原生构建基线为 **Arm GNU Toolchain 14.2、Cortex-M4 Thumb、freestanding C**。浮点 ABI 必须与宿主一致；SDK 不提供完整 libc、C++ 初始化、TLS 或外部动态库链接。
 
-基线：Arm GNU Toolchain 14.2、Cortex-M4 Thumb、Python 3、CMake 3.22+、Ninja。只支持 freestanding C；没有完整 libc、C++ 初始化、TLS 或外部动态库。浮点 ABI 由 target.json 明确声明，并由打包工具核对 ELF 属性。
+位置无关仍要求满足目标 ABI、容量及 Flash/RAM 对齐约束。每次创建实例都重新初始化 RAM 并修正 GOT/指针，Flash 正文保持不变；当前不支持活动实例热迁移，也不提供内存隔离。
+
+## 快速开始：构建一个无 GUI App
+
+先准备 Git、CMake 3.22+、Ninja、Python 3 和 Arm GNU Toolchain，将 `cmake`、`ninja`、`arm-none-eabi-gcc` 等工具加入 PATH。下面构建仓库自带的 counter 示例，App 仅通过注入的日志服务输出计数。
 
 ```sh
-python -m pip install -r tools/requirements.txt
+git clone https://github.com/Fisheatingcats/MicroApp.git
+cd MicroApp
+```
+
+### POSIX shell
+
+```sh
+python3 -m venv build/venv
+build/venv/bin/python -m pip install -r tools/requirements.txt
 cmake -S examples/counter -B build/counter -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/arm-none-eabi.cmake"
+  -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/arm-none-eabi.cmake" \
+  -DPython3_EXECUTABLE="$PWD/build/venv/bin/python"
 cmake --build build/counter
-python tools/microapp/verify_microapp.py build/counter/counter.mapp \
+build/venv/bin/python tools/microapp/verify_microapp.py build/counter/counter.mapp \
   --profile examples/counter/target.json --json
 ```
 
-Windows 可传入绝对路径的 toolchain 文件；使用虚拟环境时，同时设置 `-DPython3_EXECUTABLE=<python 的绝对路径>`。独立工具链默认宿主 hard-float，构建另一种宿主 ABI 时在首次配置设置 `MICROAPP_ARM_FLOAT_ABI`；App ABI 仍以 profile 为准。输出 `counter.elf`、`counter.map`、`counter.mapp` 和 `counter.mapp.json`。报告包括代码/正文 Flash、GOT、data、BSS、总 RAM、修正项数量和 ELF 审计结果。
+### Windows PowerShell
 
-项目集成：
+```powershell
+python -m venv build/venv
+& ./build/venv/Scripts/python.exe -m pip install -r tools/requirements.txt
+cmake -S examples/counter -B build/counter -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/arm-none-eabi.cmake" `
+  -DPython3_EXECUTABLE="$PWD/build/venv/Scripts/python.exe"
+cmake --build build/counter
+& ./build/venv/Scripts/python.exe tools/microapp/verify_microapp.py build/counter/counter.mapp `
+  --profile examples/counter/target.json --json
+```
+
+成功后得到 `counter.elf`、`counter.map`、`counter.mapp` 和 `counter.mapp.json`。报告列出 Flash 正文、GOT、data、BSS、总 RAM、修正记录数量和 ELF 审计结果。构建与校验不会把 App 安装到设备，也不会执行其 ARM 代码；实际执行需要宿主适配。
+
+counter 配置采用 hard-float。切换浮点 ABI 时，在新构建目录中设置 `MICROAPP_ARM_FLOAT_ABI`，并同步修改 App 的 `target.json`，避免宿主工具链和 App profile 不一致。
+
+## 构建自己的 App
+
+App 工程使用 ARM 工具链配置，并通过 `microapp_add_arm_app()` 声明源码、接口头、清单与资源：
 
 ```cmake
 add_subdirectory(path/to/MicroApp microapp)
@@ -43,63 +77,67 @@ microapp_add_arm_app(my_app
     RESOURCES message=${CMAKE_CURRENT_SOURCE_DIR}/message.txt)
 ```
 
-`target.json` 声明宿主接口配置：`board_id`、`architecture: "armv7e-m"`、`float_abi: "soft"/"softfp"/"hard"`、`abi_major`、`abi_minor`、`host_version`、`max_body_size`、`max_ram_size` 和单比特权限名称。它没有物理安装地址。`app.json` 声明 `app_id`、`name`、`version`、`author`、`description` 和权限名称列表 `permissions`；完整示例见 [examples/counter](examples/counter)。
+- `host_api.h`：宿主与 App 共享的服务表类型和调用约定，服务表以 `microapp_abi_header_t` 的三个字段开头。
+- `target.json`：架构、浮点 ABI、宿主 ABI、容量和权限名称；`board_id` 表示宿主接口配置标识，不保存最终安装地址。
+- `app.json`：App ID、名称、版本、作者、描述和请求权限。
 
-入口固定为：
+完整文件见 [counter 示例](examples/counter)。原生入口固定为：
 
 ```c
 int32_t microapp_main(const void *host_api, microapp_abi_context_t *context,
                      uint32_t reason, void *arg);
 ```
 
-App 将 host_api 转为自己的宿主接口表。Host 表以 `abi_major / abi_minor / struct_size` 开头，服务通过函数指针传入；权限位及服务语义由宿主管理。`context->host_user` 由宿主持有，生命周期覆盖延迟回调。SDK 示例只接收日志函数，包含初始化变量、BSS、字符串指针、函数指针、.data.rel.ro 和跨源文件调用。
+App 检查服务表的 ABI 与尺寸，将 `host_api` 转为约定的类型，通过函数指针调用宿主。不要直接链接宿主实现的绝对地址；严格链接和 ELF 审计会拒绝未解析依赖、需要修改 Flash 的重定位及不支持的结构。
 
-## GOT + r9 与格式 2.0
+## 宿主如何接入
 
-编译使用 `-fPIC -msingle-pic-base -mpic-register=r9 -mno-pic-data-is-text-relative`。链接使用 ET_DYN、`-Bsymbolic --no-undefined --emit-relocs`，内部调用静态绑定，保留真实重定位记录。
+App 仅需 `MicroApp::sdk` 的头文件；宿主链接 `MicroApp::core`，提供 view、驱动、服务表和实例管理。公共接口分布在 [生命周期](include/microapp/microapp.h)、[原生装载](include/microapp/microapp_native.h) 和 [存储](include/microapp/microapp_store.h) 头文件中。
 
-打包工具通过 pyelftools 审计 ELF 的段、符号、ARM 属性和重定位。仅支持模板产生的内部 PC 相对调用/引用、GOT 引用和 RAM `R_ARM_RELATIVE`；未解析符号、外部绝对引用、Flash 修正、未知重定位、PLT、TLS 和构造器被拒绝。链接器的 `0x10000000 / 0x20000000` 是审计用逻辑区间，不会保存为最终地址。
+1. **验证与安装**：先用 `microapp_validate_package()` 检查完整包，再执行宿主的权限/签名策略。使用通用存储时，将清单和正文 reader 交给 `microapp_store_install()`；它追加记录、写入原样正文、读回校验，最后提交记录。失败包不得先触发擦除。
+2. **创建实例**：选择满足容量和对齐的 RAM，调用 `microapp_prepare_ram()` 准备 GOT、初始化数据和 BSS。已安装但未进入的 App 保留 Flash 和注册元数据，不需要该 App 的实例 RAM。
+3. **调用与销毁**：生命周期及延迟回调通过 `microapp_arm_call()` 进入 App。宿主保活服务表和上下文，并在销毁时停止事件源、拒绝旧回调、释放对象和回调存储。
+4. **导航与互斥**：GUI 事件使用 `microapp_request_*()`，事件派发结束后由 `microapp_tick()` 提交切换。核心的同步重入标志不是线程锁，也不自动保护所有 GUI 回调；调用与存储操作由宿主串行化。
 
-2.0 `.mapp` 由 56 B 包头、312 B 清单和不可变正文组成。正文从代码和只读数据开始，随后是初始化 RAM、12 字节 RAM 修正记录和资源表。清单偏移相对于正文或实例 RAM；入口和 Flash 函数指针保留 Thumb 最低位。代码与 RAM 的对齐要求从 ELF 节属性推导并由宿主核对。CRC 覆盖清单、正文、资源和修正记录。没有扫描镜像猜测指针的逻辑。旧 1.0 包明确拒绝。
+切换顺序为旧实例 PAUSE/DESTROY 后新实例 CREATE，允许共享 App RAM。空 view 分配失败时保留旧 App；新 CREATE 失败时尝试重建第一个注册的 App（宿主应先注册 Home），失败 CREATE 的局部资源由 App/适配器清理。
 
-GOT 位于实例 RAM。创建实例时，SDK 清零 RAM、复制初始化数据，再根据修正记录写入实际 Flash/RAM 指针。r9 指向链接器定义的 `_GLOBAL_OFFSET_TABLE_`。.data.rel.ro 的指针也在 RAM 中准备。相同包在不同位置运行时，Flash 正文逐字节保持不变。
+多 App 记录按相对偏移遍历，采用最新已提交版本和删除标记。整理需要独立备份区，容量至少为主区大小加 4096 B；没有备份仍可追加和删除，但不能整理。存储回调必须同步持久化，擦写/恢复期间不得从相关区域执行 App，搬移后需重新枚举代码和资源位置。
 
-## 宿主装载与调用
-
-链接 `MicroApp::core` 可使用 `microapp_native.h` 中的流式校验与 RAM 准备接口；ARM 编译时包含汇编调用桥。只需要头文件的 App 链接 `MicroApp::sdk`。
-
-1. 为包提供有长度限制的随机读取器，调用 `microapp_validate_package()` 核对目标 ABI、容量、CRC、资源和 RAM 记录；宿主检查签名策略。
-2. 宿主选择槽内正文位置，写入原样正文、读回校验，最后提交槽头。失败包不得先擦除安装槽。
-3. 宿主选择容量足够且满足对齐的 RAM 区间，调用 `microapp_prepare_ram()`。每次创建都重新准备 RAM。
-4. 生命周期通过 `microapp_arm_call(got, entry, host_api, context, reason, arg)` 进入 App；桥保存、设置和恢复 r9，并保持 AAPCS 栈对齐。
-5. 延迟事件也必须走调用桥。宿主保存原始 user_data，并在实例销毁后拒绝其回调；对象删除和回调存储释放由宿主负责。
-
-Flash 驱动、安装入口、GUI/设备服务、签名验证和事件调度属于宿主适配。当前只支持一个活动原生实例；其他已安装 App 只保留 Flash 正文和注册元数据，不占实例 RAM。CRC 是完整性检查；签名与授权由宿主控制。
-
-## 多 App 存储
-
-可选的 `microapp_store.h` 提供独立的追加写入、按 ID 更新/删除、枚举和空间整理协议。宿主传入有边界的同步 read/write/erase 回调、Flash 区域和目标配置；写入只能将位从 1 清为 0，驱动返回前必须完成持久化。所有操作由宿主串行调用，整理和恢复时不得有 App 在该区域执行。
-
-每条记录有 512 B 容器头和按要求对齐的原样正文。记录通过区域相对偏移和长度遍历，最新已提交记录决定该 ID 的版本；提交字段最后写入，删除使用标记。未提交更新不会替换旧 App，删除后旧版本也不会重新出现。坏包先拒绝，空间不足则保留既有内容。更新需要同时容纳旧版本和新版本。
-
-整理需要独立备份区域，容量至少为主区域大小加 4096 B。协议先复制有效记录、校验并提交备份，再擦写主区域，最后标记备份已消费；启动时 `microapp_store_open()` 恢复已提交但未完成的整理。正文不随搬移改变，实例启动时按新地址准备 GOT/RAM。没有备份时仍可追加和删除，不能整理。宿主决定备份介质、容量、安装权限和运行互斥；驱动必须满足上述持久化契约。
-
-容器版本与 `.mapp` 格式 2.0 分开管理；有效的旧格式 2.0 单槽可在整理时迁移，1.0 包仍然拒绝。
-
-## 生命周期管理器
-
-`microapp.h` 是独立的进程内管理器：单前台 App，保留 8 个静态系统 App 槽，动态 App 使用宿主持有的链表节点，没有固定注册数量上限。核心无内部堆分配、任务或锁；数量由宿主存储和内存决定，导航历史单独限制为 8 项。宿主提供 create_view/delete_view/show_view，单任务调用；描述符、字符串、节点和用户数据在注册期间保持有效。
-
-动态注册使用零初始化的 `microapp_registration_t` 和 `microapp_register_dynamic()`；注销成功后节点清空，活动 App 的注销返回 BUSY。静态注册仍使用 `microapp_register()`。
-
-切换先分配空 view，再执行旧 App pause/destroy → 新 App create → 显示新 view → 删除旧 view → 新 App resume。这样新 App CREATE 前旧实例已释放，允许多个已安装 App 复用同一片 RAM。空 view 分配失败保留旧 App；CREATE 失败时清理失败 view，重新创建第一个注册的系统 App（宿主应先注册 Home）。App 自己负责失败 CREATE 的局部资源清理。事件中使用 `microapp_request_*` 延迟导航，再由 `microapp_tick()` 提交；立即递归切换返回 BUSY。
+管理器提供 8 个静态槽和宿主持有的动态链表节点，导航历史最多 8 项；动态注册数量受实际 Flash/宿主内存限制。核心不分配堆、不创建任务，也不自带 GUI。CRC 用于完整性校验，签名认证由宿主实现。
 
 ## 测试
 
+以下命令面向 x86/x86_64 主机，使用本机 GCC；Windows 可使用已加入 PATH 的 MinGW。它们不执行 ARM 包的机器码。
+
+POSIX shell：
+
 ```sh
-cmake -S . -B build/host -G Ninja -DMICROAPP_BUILD_TESTS=ON
+cmake -S . -B build/host -G Ninja -DCMAKE_C_COMPILER=gcc \
+  -DMICROAPP_BUILD_TESTS=ON -DPython3_EXECUTABLE="$PWD/build/venv/bin/python"
 cmake --build build/host
 ctest --test-dir build/host --output-on-failure
 ```
 
-包括生命周期核心、32 个动态注册节点、单实例 CREATE 顺序、2.0 流式校验、四组地址 RAM 准备、多 App 更新/删除/整理恢复、已提交非法记录拒绝和写入故障注入。安装 ARM 工具链后，Python 测试会将 SDK 导出到临时独立目录构建真实示例，审计指针修正和依赖，并检查非法 ELF/严格未解析符号拒绝；没有 ARM 工具链时明确跳过该组。
+Windows PowerShell：
+
+```powershell
+cmake -S . -B build/host -G Ninja -DCMAKE_C_COMPILER=gcc `
+  -DMICROAPP_BUILD_TESTS=ON -DPython3_EXECUTABLE="$PWD/build/venv/Scripts/python.exe"
+cmake --build build/host
+ctest --test-dir build/host --output-on-failure
+```
+
+覆盖注册/导航/单实例、RAM 修正、包校验、多 App 更新/删除/整理恢复及存储故障注入。Python 工具测试需要上述虚拟环境；ARM 编译器可用时还会在独立临时目录构建真实示例并审计 ELF，缺少 ARM 编译器时该组跳过。主机测试和软件故障注入不能代替目标板执行、驱动及真实断电验收。
+
+## 文档与版本
+
+- [软件架构教程](docs/architecture-tutorial.md)：分层、对象生命周期、接口注入、GOT/r9、安装事务、恢复和宿主移植。
+- [核心与宿主边界](ARCHITECTURE.md)：快速查看框架和产品各自的职责。
+- [Doxygen 文档生成](docs/doxygen.md)：生成带类型、参数契约和源码浏览的 HTML。
+- [更新记录](CHANGELOG.md)：版本变化与功能历史。
+
+库版本、App 版本、宿主 ABI 与包格式分别管理。本版库和提供的示例 App 使用 `V0.0.2`；CMake 数字版本及 major/minor/patch 为 `0.0.2`，包格式为 2.0。App 的后续版本可独立演进。
+
+## 许可与商业授权
+
+正式许可证和商业授权条款尚未定稿。授权方向与待确定事项见 [LICENSING.md](LICENSING.md)，该文件是方案记录，当前不构成正式使用许可。
