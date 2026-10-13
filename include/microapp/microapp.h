@@ -20,7 +20,7 @@ extern "C" {
 #define MICROAPP_VERSION_MAJOR 0 /**< Framework major version; independent of host ABI. */
 #define MICROAPP_VERSION_MINOR 0 /**< Framework minor version. */
 #define MICROAPP_VERSION_PATCH 2 /**< Framework patch version. */
-#define MICROAPP_VERSION_STRING "0.0.2" /**< Human-readable framework version. */
+#define MICROAPP_VERSION_STRING "V0.0.2" /**< Human-readable framework version. */
 #define MICROAPP_CAPACITY 8u /**< Static registration slots; dynamic nodes do not consume them. */
 #define MICROAPP_HISTORY_CAPACITY 8u /**< Maximum saved navigation entries, independent of App count. */
 

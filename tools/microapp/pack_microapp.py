@@ -29,7 +29,7 @@ def pack(elf,profile,metadata,resources=()):
     data=HEADER.pack(*fields)+encode_manifest(m)+body
     fields[-1]=crc(data); data=HEADER.pack(*fields)+data[56:]
     validate(data,profile)
-    report={**m,'sdk_version':'0.0.2','package_size':len(data),'flash_body':len(body),
+    report={**m,'sdk_version':'V0.0.2','package_size':len(data),'flash_body':len(body),
             'got':x['got_size'],'data':x['data_size'],'bss':x['bss_size'],'total_ram':x['ram_size'],
             'audited_relocations':x['audited_relocations'],'external_dependencies':[]}
     return data,report

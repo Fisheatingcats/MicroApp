@@ -2,7 +2,9 @@
 
 <p align="center"><img src="assets/logo.png" alt="MicroApp logo" width="320"></p>
 
-版本 `0.0.2`。MicroApp 提供 MCU App 生命周期管理，以及独立的 ARM App 构建、链接、打包、检查和校验 SDK。公共代码、工具和无 GUI 示例不依赖 LVGL、HAL、RTOS 或产品工程。
+版本 `V0.0.2`。MicroApp 提供 MCU App 生命周期管理，以及独立的 ARM App 构建、链接、打包、检查和校验 SDK。公共代码、工具和无 GUI 示例不依赖 LVGL、HAL、RTOS 或产品工程。
+
+发布标签、展示字符串与本版示例 App 清单统一使用 `V0.0.2`；CMake 的数字版本和版本宏仍为 `0.0.2`。宿主 ABI 与安装包格式独立管理。
 
 源码：[Fisheatingcats/MicroApp](https://github.com/Fisheatingcats/MicroApp)。首版 `v0.0.1` 标签保持不变。正式许可与商业授权条款待定，见 [LICENSING.md](LICENSING.md)。
 
@@ -11,7 +13,7 @@
 - [软件架构完整教程](docs/architecture-tutorial.md)：分层、三种 App 对象、生命周期、接口注入、ELF/PIC、GOT/r9、安装事务、恢复与宿主移植。
 - [Doxygen 文档生成与注释维护](docs/doxygen.md)：从库根目录执行 `doxygen Doxyfile`，生成带模块、类型、参数与源码浏览的 HTML。
 
-公共头文件记录接口契约，核心实现与 counter 示例使用 Doxygen 风格注释。注释与教程以当前 0.0.2 实现为准。
+公共头文件记录接口契约，核心实现与 counter 示例使用 Doxygen 风格注释。注释与教程以当前 V0.0.2 实现为准。
 
 ## 独立构建 ARM App
 

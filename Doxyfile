@@ -1,6 +1,6 @@
 # Create build/doxygen first, then run from the MicroApp root: doxygen Doxyfile
 PROJECT_NAME           = MicroApp
-PROJECT_NUMBER         = 0.0.2
+PROJECT_NUMBER         = V0.0.2
 PROJECT_BRIEF          = "Independent MCU App SDK, lifecycle and persistent storage"
 OUTPUT_DIRECTORY       = build/doxygen
 OUTPUT_LANGUAGE        = Chinese

@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
+# CMake requires a numeric version; the public release name is V0.0.2.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(MicroApp VERSION 0.0.2 LANGUAGES C)
 endif()
